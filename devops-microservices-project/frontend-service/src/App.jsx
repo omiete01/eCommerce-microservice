@@ -1,15 +1,62 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 function App() {
-  const [users, setUsers] = useState([]);
+  const [isLogin, setIsLogin] = useState(true);
+  const [name, setName] = useState('');
+  const [password, setPassword] = useState('');
+  const [token, setToken] = useState(localStorage.getItem('token') || '');
   const [products, setProducts] = useState([]);
-  const [newUser, setNewUser] = useState('');
-  const [newProduct, setNewProduct] = useState('');
 
-  const fetchUsers = async () => {
-    const res = await fetch('http://localhost:5001/users');
+  const loggedIn = !!token;
+
+  useEffect(() => {
+    if (token) {
+      fetchProducts();
+    }
+  }, [token]);
+
+  const handleLogin = async () => {
+    const res = await fetch('http://localhost:5001/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, password }),
+    });
+
     const data = await res.json();
-    setUsers(data);
+    if (data.token) {
+      localStorage.setItem('token', data.token);
+      setToken(data.token);
+    } else {
+      alert(data.error || 'Login failed');
+    }
+  };
+
+  const handleRegister = async () => {
+    const res = await fetch('http://localhost:5001/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, password }),
+    });
+
+    const data = await res.json();
+    if (res.status === 201) {
+      alert('Registration successful! You can now log in.');
+      setIsLogin(true);
+    } else {
+      alert(data.error || 'Registration failed');
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    isLogin ? await handleLogin() : await handleRegister();
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    setToken('');
+    setName('');
+    setPassword('');
   };
 
   const fetchProducts = async () => {
@@ -18,77 +65,56 @@ function App() {
     setProducts(data);
   };
 
-  useEffect(() => {
-    fetchUsers();
-    fetchProducts();
-  }, []);
-
-  const handleAddUser = async (e) => {
-    e.preventDefault();
-    await fetch('http://localhost:5001/users', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newUser }),
-    });
-    setNewUser('');
-    fetchUsers();
-  };
-
-  const handleAddProduct = async (e) => {
-    e.preventDefault();
-    await fetch('http://localhost:5002/products', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newProduct }),
-    });
-    setNewProduct('');
-    fetchProducts();
-  };
-
   return (
-    <div className="container mt-4">
-      <h1 className="text-center mb-4">eCommerce Dashboard</h1>
+    <div className="container mt-5">
+      {!loggedIn ? (
+        <div className="col-md-6 offset-md-3">
+          <div className="text-center mb-4">
+            <button className={`btn btn-sm ${isLogin ? 'btn-primary' : 'btn-outline-primary'} me-2`}
+              onClick={() => setIsLogin(true)}>
+              Login
+            </button>
+            <button className={`btn btn-sm ${!isLogin ? 'btn-success' : 'btn-outline-success'}`}
+              onClick={() => setIsLogin(false)}>
+              Register
+            </button>
+          </div>
 
-      <div className="row">
-        {/* Users */}
-        <div className="col-md-6">
-          <h3>Users</h3>
-          <form onSubmit={handleAddUser} className="mb-3">
-            <div className="input-group">
+          <form onSubmit={handleSubmit}>
+            <h3 className="text-center">{isLogin ? 'Login' : 'Register'}</h3>
+            <div className="mb-3">
               <input
                 type="text"
-                value={newUser}
-                onChange={(e) => setNewUser(e.target.value)}
+                placeholder="Username"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
                 className="form-control"
-                placeholder="New user name"
+                required
               />
-              <button type="submit" className="btn btn-primary">Add</button>
             </div>
+            <div className="mb-3">
+              <input
+                type="password"
+                placeholder="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="form-control"
+                required
+              />
+            </div>
+            <button type="submit" className="btn btn-block w-100 btn-dark">
+              {isLogin ? 'Login' : 'Register'}
+            </button>
           </form>
-          <ul className="list-group">
-            {users.map((user) => (
-              <li key={user.id} className="list-group-item">
-                {user.name}
-              </li>
-            ))}
-          </ul>
         </div>
-
-        {/* Products */}
-        <div className="col-md-6">
-          <h3>Products</h3>
-          <form onSubmit={handleAddProduct} className="mb-3">
-            <div className="input-group">
-              <input
-                type="text"
-                value={newProduct}
-                onChange={(e) => setNewProduct(e.target.value)}
-                className="form-control"
-                placeholder="New product name"
-              />
-              <button type="submit" className="btn btn-success">Add</button>
-            </div>
-          </form>
+      ) : (
+        <div>
+          <div className="d-flex justify-content-between align-items-center mb-4">
+            <h2>Product Dashboard</h2>
+            <button onClick={handleLogout} className="btn btn-outline-danger">
+              Logout
+            </button>
+          </div>
           <ul className="list-group">
             {products.map((product) => (
               <li key={product.id} className="list-group-item">
@@ -97,7 +123,7 @@ function App() {
             ))}
           </ul>
         </div>
-      </div>
+      )}
     </div>
   );
 }

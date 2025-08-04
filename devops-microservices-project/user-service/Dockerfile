@@ -1,6 +1,6 @@
 FROM python:3.10-slim
 WORKDIR /app
 COPY . .
-RUN pip install flask flask_sqlalchemy psycopg2-binary
+RUN pip install -r requirements.txt
 EXPOSE 5001
 CMD ["python", "app.py"]

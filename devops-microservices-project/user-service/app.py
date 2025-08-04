@@ -1,3 +1,4 @@
+from flask_migrate import Migrate
 from flask import Flask, jsonify, request, abort
 from flask_sqlalchemy import SQLAlchemy
 import os
@@ -7,8 +8,12 @@ import jwt
 import datetime
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:1234567890@localhost/webapp'
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'mysecretkey')
+app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://user_service:userpassword@localhost/user_db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
 db = SQLAlchemy(app)
+migrate = Migrate(app, db)
 CORS(app)
 
 app.app_context().push()
@@ -17,41 +22,38 @@ class User(db.Model):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
+    password = db.Column(db.String(200), nullable=False)
 
-@app.route("/users", methods=["GET"])
-def get_users():
-    users = User.query.all()
-    return jsonify([{"id": u.id, "name": u.name} for u in users])
-
-@app.route("/users/<int:user_id>", methods=["GET"])
-def get_user(user_id):
-    user = User.query.get_or_404(user_id)
-    return jsonify({"id": user.id, "name": user.name})
-
-@app.route("/users", methods=["POST"])
-def create_user():
+@app.route("/register", methods=["POST"])
+def register():
     data = request.get_json()
-    if not data or not data.get("name"):
-        abort(400, "Name is required")
-    user = User(name=data["name"])
+    if not data or not data.get("name") or not data.get("password"):
+        return jsonify({"error": "Name and password are required"}), 400
+
+    if User.query.filter_by(name=data["name"]).first():
+        return jsonify({"error": "User already exists"}), 400
+
+    hashed_password = generate_password_hash(data["password"])
+    user = User(name=data["name"], password=hashed_password)
     db.session.add(user)
     db.session.commit()
-    return jsonify({"id": user.id, "name": user.name}), 201
 
-@app.route("/users/<int:user_id>", methods=["PUT"])
-def update_user(user_id):
-    user = User.query.get_or_404(user_id)
+    return jsonify({"message": "User created"}), 201
+
+@app.route("/login", methods=["POST"])
+def login():
     data = request.get_json()
-    user.name = data.get("name", user.name)
-    db.session.commit()
-    return jsonify({"id": user.id, "name": user.name})
+    user = User.query.filter_by(name=data.get("name")).first()
 
-@app.route("/users/<int:user_id>", methods=["DELETE"])
-def delete_user(user_id):
-    user = User.query.get_or_404(user_id)
-    db.session.delete(user)
-    db.session.commit()
-    return jsonify({"message": "User deleted"})
+    if not user or not check_password_hash(user.password, data.get("password")):
+        return jsonify({"error": "Invalid credentials"}), 401
+
+    token = jwt.encode({
+        "user_id": user.id,
+        "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=2)
+    }, app.config["SECRET_KEY"], algorithm="HS256")
+
+    return jsonify({"token": token})
 
 @app.route("/health")
 def health():
@@ -60,4 +62,4 @@ def health():
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
-    app.run(host='0.0.0.0', port=5001)
+    app.run(host='0.0.0.0', port=5001, debug=True)
