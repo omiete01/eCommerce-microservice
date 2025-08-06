@@ -1,46 +1,46 @@
+
 services:
-  
+  postgres:
+    image: postgres:17
+    container_name: postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 1234567890
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/init/init-multiple-dbs.sh:/docker-entrypoint-initdb.d/init-multiple-dbs.sh:ro
+    ports:
+      - "5432:5432"
+
+  user_service:
+    build: ./user-service
+    environment:
+      DATABASE_URL: postgresql://user_service:userpassword@postgres/user_db
+    ports:
+      - "5001:5001"
+    depends_on:
+      - postgres
+
+  product_service:
+    build: ./product-service
+    environment:
+      DATABASE_URL: postgresql://product_service:productpassword@postgres/product_db
+    ports:
+      - "5002:5002"
+    depends_on:
+      - postgres
+
   frontend:
     build: ./frontend-service
     ports:
-      - "3000:3000"
-    networks:
-      - app-net
-    depends_on:
-      - user-service
-      - product-service
-  
-  user-service:
-    build: ./user-service
-    ports:
-      - "5001:5001"
-    environment:
-      - DATABASE_URL=postgresql://postgres:1234567890@localhost/webapp
-    depends_on:
-      - db
-    networks:
-      - app-net
-
-  product-service:
-    build: ./product-service
-    ports:
-      - "5002:5002"
-    environment:
-      - DATABASE_URL=postgresql://postgres:1234567890@localhost/webapp
-    depends_on:
-      - db
-    networks:
-      - app-net
-
-  db:
-    image: postgres
-    environment:
-      POSTGRES_DB: webapp
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 1234567890
-    ports:
-      - "5432:5432"
+      - "3000:5173"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - app-net
+      - ./frontend-service:/app
+      - /app/node_modules
+    depends_on:
+      - user_service
+      - product_service
+
+volumes:
+  pgdata:

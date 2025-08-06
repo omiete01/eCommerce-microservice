@@ -1,12 +1,19 @@
-FROM node:18-slim
+# Base image
+FROM node:20-alpine
 
+# Create app directory
 WORKDIR /app
-COPY . .
+
+# Copy files
+COPY package*.json ./
+# COPY .env ./
 
 RUN npm install
-RUN npm run build
 
-# Serve using serve package
-RUN npm install -g serve
-EXPOSE 3000
-CMD ["serve", "-s", "dist"]
+COPY . .
+
+# RUN npm run build
+
+EXPOSE 5173
+
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]

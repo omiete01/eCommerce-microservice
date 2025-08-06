@@ -1,15 +1,19 @@
 from flask_migrate import Migrate
-from flask import Flask, jsonify, request, abort
+from flask import Flask, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
 import os
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 import jwt
 import datetime
+import time
+from sqlalchemy.exc import OperationalError
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'mysecretkey')
+# app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://user_service:userpassword@postgres/user_db'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://user_service:userpassword@localhost/user_db'
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
@@ -61,5 +65,12 @@ def health():
 
 if __name__ == "__main__":
     with app.app_context():
-        db.create_all()
+        for _ in range(10):
+            try:
+                db.create_all()
+                break
+            except OperationalError:
+                print("Database unavailable, retrying in 2 seconds...")
+                time.sleep(2)
+        # db.create_all()
     app.run(host='0.0.0.0', port=5001, debug=True)

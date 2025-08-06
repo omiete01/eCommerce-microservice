@@ -2,9 +2,13 @@ from flask_migrate import Migrate
 from flask import Flask, jsonify, request, abort
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
+import time
+from sqlalchemy.exc import OperationalError
 
 app = Flask(__name__)
+# app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://product_service:productpassword@postgres/product_db'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://product_service:productpassword@localhost/product_db'
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
@@ -23,30 +27,63 @@ class Product(db.Model):
 @app.route("/products", methods=["GET"])
 def get_products():
     products = Product.query.all()
-    return jsonify([{"id": p.id, "name": p.name} for p in products])
+    return jsonify([
+        {
+            "id": p.id,
+            "name": p.name,
+            "price": p.price,
+            "description": p.description
+        } for p in products
+    ])
 
-@app.route("/products/<int:product_id>", methods=["GET"])
-def get_product(product_id):
-    product = Product.query.get_or_404(product_id)
-    return jsonify({"id": product.id, "name": product.name})
 
 @app.route("/products", methods=["POST"])
 def create_product():
     data = request.get_json()
-    if not data or not data.get("name"):
-        abort(400, "Name is required")
-    product = Product(name=data["name"])
-    db.session.add(product)
-    db.session.commit()
-    return jsonify({"id": product.id, "name": product.name}), 201
+
+    name = data.get("name")
+    price = data.get("price")
+    description = data.get("description")
+
+    if not name or price is None:
+        return jsonify({'error': 'Name and price are required'}), 400
+
+    try:
+        product = Product(name=name, price=float(price), description=description)
+        db.session.add(product)
+        db.session.commit()
+        return jsonify({
+            "id": product.id,
+            "name": product.name,
+            "price": product.price,
+            "description": product.description
+        }), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
 
 @app.route("/products/<int:product_id>", methods=["PUT"])
 def update_product(product_id):
     product = Product.query.get_or_404(product_id)
     data = request.get_json()
+
     product.name = data.get("name", product.name)
-    db.session.commit()
-    return jsonify({"id": product.id, "name": product.name})
+    product.price = data.get("price", product.price)
+    product.description = data.get("description", product.description)
+
+    try:
+        db.session.commit()
+        return jsonify({
+            "id": product.id,
+            "name": product.name,
+            "price": product.price,
+            "description": product.description
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
 
 @app.route("/products/<int:product_id>", methods=["DELETE"])
 def delete_product(product_id):
@@ -61,5 +98,12 @@ def health():
 
 if __name__ == "__main__":
     with app.app_context():
-        db.create_all()
+        for _ in range(10):
+            try:
+                db.create_all()
+                break
+            except OperationalError:
+                print("Database unavailable, retrying in 2 seconds...")
+                time.sleep(2)
+        # db.create_all()
     app.run(host='0.0.0.0', port=5002, debug=True)

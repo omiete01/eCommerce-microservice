@@ -1,4 +1,8 @@
+// FRONTEND - React App
 import React, { useState, useEffect } from 'react';
+
+// const apiUserUrl = import.meta.env.VITE_USER_API_URL;
+// const apiProductUrl = import.meta.env.VITE_PRODUCT_API_URL;
 
 function App() {
   const [isLogin, setIsLogin] = useState(true);
@@ -6,6 +10,10 @@ function App() {
   const [password, setPassword] = useState('');
   const [token, setToken] = useState(localStorage.getItem('token') || '');
   const [products, setProducts] = useState([]);
+  const [productName, setProductName] = useState('');
+  const [productPrice, setProductPrice] = useState('');
+  const [productDescription, setProductDescription] = useState('');
+  const [editingProductId, setEditingProductId] = useState(null);
 
   const loggedIn = !!token;
 
@@ -16,7 +24,7 @@ function App() {
   }, [token]);
 
   const handleLogin = async () => {
-    const res = await fetch('http://localhost:5001/login', {
+    const res = await fetch("http://localhost:5001/login", {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, password }),
@@ -32,7 +40,7 @@ function App() {
   };
 
   const handleRegister = async () => {
-    const res = await fetch('http://localhost:5001/register', {
+    const res = await fetch("http://localhost:5001/register", {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, password }),
@@ -60,9 +68,77 @@ function App() {
   };
 
   const fetchProducts = async () => {
-    const res = await fetch('http://localhost:5002/products');
+    const res = await fetch("http://localhost:5002/products");
     const data = await res.json();
     setProducts(data);
+  };
+
+  const handleProductSubmit = async (e) => {
+    e.preventDefault();
+
+    const trimmedName = productName.trim();
+    const trimmedDesc = productDescription.trim();
+    const priceValue = parseFloat(productPrice);
+
+    if (!trimmedName || isNaN(priceValue) || priceValue <= 0) {
+      alert('Name and valid price are required');
+      return;
+    }
+
+    const product = {
+      name: trimmedName,
+      price: priceValue,
+      description: trimmedDesc,
+    };
+
+    try {
+      let res;
+      if (editingProductId) {
+        res = await fetch(`http://localhost:5002/products/${editingProductId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(product),
+        });
+      } else {
+        res = await fetch('http://localhost:5002/products', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(product),
+        });
+      }
+
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || 'Something went wrong');
+        return;
+      }
+
+      setProductName('');
+      setProductPrice('');
+      setProductDescription('');
+      setEditingProductId(null);
+      fetchProducts();
+    } catch (err) {
+      console.error(err);
+      alert('Unexpected error');
+    }
+  };
+
+  const handleEdit = (product) => {
+    setProductName(product.name);
+    setProductPrice(product.price.toString());
+    setProductDescription(product.description || '');
+    setEditingProductId(product.id);
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this product?')) return;
+
+    await fetch(`http://localhost:5002/products/${id}`, {
+      method: 'DELETE',
+    });
+
+    fetchProducts();
   };
 
   return (
@@ -70,55 +146,55 @@ function App() {
       {!loggedIn ? (
         <div className="col-md-6 offset-md-3">
           <div className="text-center mb-4">
-            <button className={`btn btn-sm ${isLogin ? 'btn-primary' : 'btn-outline-primary'} me-2`}
-              onClick={() => setIsLogin(true)}>
-              Login
-            </button>
-            <button className={`btn btn-sm ${!isLogin ? 'btn-success' : 'btn-outline-success'}`}
-              onClick={() => setIsLogin(false)}>
-              Register
-            </button>
+            <button className={`btn btn-sm ${isLogin ? 'btn-primary' : 'btn-outline-primary'} me-2`} onClick={() => setIsLogin(true)}>Login</button>
+            <button className={`btn btn-sm ${!isLogin ? 'btn-success' : 'btn-outline-success'}`} onClick={() => setIsLogin(false)}>Register</button>
           </div>
 
           <form onSubmit={handleSubmit}>
             <h3 className="text-center">{isLogin ? 'Login' : 'Register'}</h3>
             <div className="mb-3">
-              <input
-                type="text"
-                placeholder="Username"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="form-control"
-                required
-              />
+              <input type="text" placeholder="Username" value={name} onChange={(e) => setName(e.target.value)} className="form-control" required />
             </div>
             <div className="mb-3">
-              <input
-                type="password"
-                placeholder="Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="form-control"
-                required
-              />
+              <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} className="form-control" required />
             </div>
-            <button type="submit" className="btn btn-block w-100 btn-dark">
-              {isLogin ? 'Login' : 'Register'}
-            </button>
+            <button type="submit" className="btn btn-block w-100 btn-dark">{isLogin ? 'Login' : 'Register'}</button>
           </form>
         </div>
       ) : (
         <div>
           <div className="d-flex justify-content-between align-items-center mb-4">
             <h2>Product Dashboard</h2>
-            <button onClick={handleLogout} className="btn btn-outline-danger">
-              Logout
-            </button>
+            <button onClick={handleLogout} className="btn btn-outline-danger">Logout</button>
           </div>
+
+          <form onSubmit={handleProductSubmit} className="mb-4">
+            <h5>{editingProductId ? 'Edit Product' : 'Add Product'}</h5>
+            <div className="row g-2 mb-2">
+              <div className="col-md-4">
+                <input type="text" className="form-control" placeholder="Product Name" value={productName} onChange={(e) => setProductName(e.target.value)} required />
+              </div>
+              <div className="col-md-3">
+                <input type="number" className="form-control" placeholder="Price" value={productPrice} onChange={(e) => setProductPrice(e.target.value)} step="0.01" required />
+              </div>
+              <div className="col-md-5">
+                <input type="text" className="form-control" placeholder="Description" value={productDescription} onChange={(e) => setProductDescription(e.target.value)} />
+              </div>
+            </div>
+            <button type="submit" className="btn btn-success">{editingProductId ? 'Update' : 'Add'}</button>
+          </form>
+
           <ul className="list-group">
             {products.map((product) => (
-              <li key={product.id} className="list-group-item">
-                {product.name}
+              <li key={product.id} className="list-group-item d-flex justify-content-between align-items-center">
+                <div>
+                  <strong>{product.name}</strong> — ${product.price.toFixed(2)}<br />
+                  <small>{product.description}</small>
+                </div>
+                <div>
+                  <button onClick={() => handleEdit(product)} className="btn btn-sm btn-warning me-2">Edit</button>
+                  <button onClick={() => handleDelete(product.id)} className="btn btn-sm btn-danger">Delete</button>
+                </div>
               </li>
             ))}
           </ul>
