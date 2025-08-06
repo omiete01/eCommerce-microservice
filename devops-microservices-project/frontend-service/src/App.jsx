@@ -1,8 +1,8 @@
 // FRONTEND - React App
 import React, { useState, useEffect } from 'react';
 
-// const apiUserUrl = import.meta.env.VITE_USER_API_URL;
-// const apiProductUrl = import.meta.env.VITE_PRODUCT_API_URL;
+const apiUserUrl = import.meta.env.VITE_USER_API_URL;
+const apiProductUrl = import.meta.env.VITE_PRODUCT_API_URL;
 
 function App() {
   const [isLogin, setIsLogin] = useState(true);
@@ -24,7 +24,7 @@ function App() {
   }, [token]);
 
   const handleLogin = async () => {
-    const res = await fetch("http://localhost:5001/login", {
+    const res = await fetch(`${apiUserUrl}/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, password }),
@@ -40,7 +40,7 @@ function App() {
   };
 
   const handleRegister = async () => {
-    const res = await fetch("http://localhost:5001/register", {
+    const res = await fetch(`${apiUserUrl}/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, password }),
@@ -68,7 +68,7 @@ function App() {
   };
 
   const fetchProducts = async () => {
-    const res = await fetch("http://localhost:5002/products");
+    const res = await fetch( `${apiProductUrl}/products`);
     const data = await res.json();
     setProducts(data);
   };
@@ -94,13 +94,13 @@ function App() {
     try {
       let res;
       if (editingProductId) {
-        res = await fetch(`http://localhost:5002/products/${editingProductId}`, {
+        res = await fetch(`${apiProductUrl}/products/${editingProductId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(product),
         });
       } else {
-        res = await fetch('http://localhost:5002/products', {
+        res = await fetch(`${apiProductUrl}/products`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(product),
@@ -134,7 +134,7 @@ function App() {
   const handleDelete = async (id) => {
     if (!window.confirm('Are you sure you want to delete this product?')) return;
 
-    await fetch(`http://localhost:5002/products/${id}`, {
+    await fetch(`${apiProductUrl}/products/${id}`, {
       method: 'DELETE',
     });
 
