@@ -12,7 +12,8 @@ from sqlalchemy.exc import OperationalError
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'mysecretkey')
 # app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://user_service:userpassword@postgres/user_db'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://user_service:userpassword@localhost/user_db'
+# app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://user_service:userpassword@localhost/user_db'
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 

@@ -1,13 +1,15 @@
 from flask_migrate import Migrate
-from flask import Flask, jsonify, request, abort
+from flask import Flask, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 import time
 from sqlalchemy.exc import OperationalError
+import os
 
 app = Flask(__name__)
 # app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://product_service:productpassword@postgres/product_db'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://product_service:productpassword@localhost/product_db'
+# app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://product_service:productpassword@localhost/product_db'
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
