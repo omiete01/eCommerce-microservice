@@ -47,32 +47,56 @@ def get_product(product_id):
 
 @app.route("/products", methods=["GET"])
 def get_products():
+    cache_key = "products:all"
+    cached_products = redis_client.get(cache_key)
+    if cached_products:
+        return jsonify(json.loads(cached_products))
+
     products = Product.query.all()
-    return jsonify([
+    products_list = [
         {
             "id": p.id,
             "name": p.name,
             "price": p.price,
             "description": p.description
         } for p in products
-    ])
+    ]
+    redis_client.setex(cache_key, 60, json.dumps(products_list))
+    return jsonify(products_list)
 
+@app.route("/products/count")
+def count_products():
+    user_id = request.args.get("user_id", type=int)
+    if user_id is None:
+        return jsonify({"error": "user_id required"}), 400
+
+    cache_key = f"products:count:user:{user_id}"
+    cached_count = redis_client.get(cache_key)
+    if cached_count is not None:
+        return jsonify({"count": int(cached_count), "cached": True})
+
+    count = Product.query.filter_by(user_id=user_id).count()
+    redis_client.setex(cache_key, 30, count)
+    return jsonify({"count": count, "cached": False})
 
 @app.route("/products", methods=["POST"])
 def create_product():
     data = request.get_json()
-
     name = data.get("name")
     price = data.get("price")
     description = data.get("description")
+    user_id = data.get("user_id")
 
-    if not name or price is None:
-        return jsonify({'error': 'Name and price are required'}), 400
+    if not name or price is None or user_id is None:
+        return jsonify({'error': 'Name, price, and user_id are required'}), 400
 
     try:
-        product = Product(name=name, price=float(price), description=description)
+        product = Product(name=name, price=float(price), description=description, user_id=user_id)
         db.session.add(product)
         db.session.commit()
+        # Invalidate related caches
+        redis_client.delete("products:all")
+        redis_client.delete(f"products:count:user:{user_id}")
         return jsonify({
             "id": product.id,
             "name": product.name,
@@ -82,7 +106,6 @@ def create_product():
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
-
 
 @app.route("/products/<int:product_id>", methods=["PUT"])
 def update_product(product_id):
@@ -95,10 +118,10 @@ def update_product(product_id):
 
     try:
         db.session.commit()
-
-        cache_key = f"product:{product_id}"
-        redis_client.delete(cache_key)
-
+        # Invalidate caches
+        redis_client.delete(f"product:{product_id}")
+        redis_client.delete("products:all")
+        redis_client.delete(f"products:count:user:{product.user_id}")
         return jsonify({
             "id": product.id,
             "name": product.name,
@@ -109,16 +132,16 @@ def update_product(product_id):
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
-
 @app.route("/products/<int:product_id>", methods=["DELETE"])
 def delete_product(product_id):
     product = Product.query.get_or_404(product_id)
+    user_id = product.user_id
     db.session.delete(product)
     db.session.commit()
-
-    cache_key = f"product:{product_id}"
-    redis_client.delete(cache_key)
-
+    # Invalidate caches
+    redis_client.delete(f"product:{product_id}")
+    redis_client.delete("products:all")
+    redis_client.delete(f"products:count:user:{user_id}")
     return jsonify({"message": "Product deleted"})
 
 @app.route("/health")

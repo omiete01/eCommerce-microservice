@@ -33,15 +33,33 @@ def get_user(user_id):
 
     cache_key = f"user:{user_id}"
     cached_user = redis_client.get(cache_key)
-    
+
     if cached_user:
-        return jsonify({"user": json.loads(cached_user), "cached": True})
-    
+        user_data = json.loads(cached_user)
+
+        # Always fetch the latest product count from product-service
+        try:
+            resp = requests.get(f'http://product_service:5002/products/count?user_id={user_id}', timeout=2)
+            if resp.status_code == 200:
+                user_data["products_created"] = resp.json().get("count", 0)
+        except Exception:
+            user_data["products_created"] = "unavailable"
+        return jsonify({"user": user_data, "cached": True})
+
+
     user = User.query.get(user_id)
     if not user:
         return jsonify({"error": "User not found"}), 404
     
-    products_count = Product.query.filter_by(user_id=user_id).count()
+    # Fetch product count from product-service
+    try:
+        resp = requests.get(f'http://product_service:5002/products/count?user_id={user_id}', timeout=2)
+        if resp.status_code == 200:
+            products_count = resp.json().get("count", 0)
+        else:
+            products_count = "unavailable"
+    except Exception:
+        products_count = "unavailable"
 
     user_data = {
         "id": user.id,
@@ -54,6 +72,14 @@ def get_user(user_id):
     redis_client.setex(cache_key, 120, json.dumps(user_data))
     return jsonify({"user": user_data, "cached": False})
 
+
+@app.route("/products/count")
+def count_products():
+    user_id = request.args.get("user_id", type=int)
+    if user_id is None:
+        return jsonify({"error": "user_id required"}), 400
+    count = Product.query.filter_by(user_id=user_id).count()
+    return jsonify({"count": count})
 
 @app.route("/register", methods=["POST"])
 def register():
