@@ -2,7 +2,7 @@ import logging
 from logging.config import fileConfig
 
 from flask import current_app
-
+from model import db
 from alembic import context
 
 # this is the Alembic Config object, which provides
@@ -14,6 +14,7 @@ config = context.config
 fileConfig(config.config_file_name)
 logger = logging.getLogger('alembic.env')
 
+target_metadata = db.metadata
 
 def get_engine():
     try:
@@ -45,10 +46,10 @@ target_db = current_app.extensions['migrate'].db
 # ... etc.
 
 
-def get_metadata():
-    if hasattr(target_db, 'metadatas'):
-        return target_db.metadatas[None]
-    return target_db.metadata
+# def get_metadata():
+#     if hasattr(target_db, 'metadatas'):
+#         return target_db.metadatas[None]
+#     return target_db.metadata
 
 
 def run_migrations_offline():
@@ -65,7 +66,7 @@ def run_migrations_offline():
     """
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
-        url=url, target_metadata=get_metadata(), literal_binds=True
+        url=url, target_metadata=target_metadata(), literal_binds=True
     )
 
     with context.begin_transaction():
@@ -79,6 +80,15 @@ def run_migrations_online():
     and associate a connection with the context.
 
     """
+
+    with connectable.connect() as connection:
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            **conf_args
+        )
+        with context.begin_transaction():
+            context.run_migrations()
 
     # this callback is used to prevent an auto-migration from being generated
     # when there are no changes to the schema

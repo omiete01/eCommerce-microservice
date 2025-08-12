@@ -1,14 +1,14 @@
 
 services:
   postgres:
-    image: postgres:latest
+    image: postgres:17-alpine
     container_name: postgres
     restart: always
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      # - pgdata:/var/lib/postgresql/data
       - ./docker/init/init-multiple-dbs.sh:/docker-entrypoint-initdb.d/init-multiple-dbs.sh:ro
     ports:
       - "5432:5432"
@@ -17,6 +17,8 @@ services:
     build: ./user-service
     environment:
       DATABASE_URL: postgresql://user_service:userpassword@postgres/user_db
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
     ports:
       - "5001:5001"
     depends_on:
@@ -26,6 +28,8 @@ services:
     build: ./product-service
     environment:
       DATABASE_URL: postgresql://product_service:productpassword@postgres/product_db
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
     ports:
       - "5002:5002"
     depends_on:
@@ -39,5 +43,11 @@ services:
       - user_service
       - product_service
 
-volumes:
-  pgdata:
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+
+# volumes:
+#   pgdata:
