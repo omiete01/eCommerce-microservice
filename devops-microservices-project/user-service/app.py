@@ -3,7 +3,7 @@ from flask import Flask, jsonify, request
 import os
 import requests
 import redis
-from model import db, User, Product
+from model import db, User
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 import jwt
@@ -14,7 +14,6 @@ import json
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'mysecretkey')
-# app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://user_service:userpassword@localhost/user_db'
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
@@ -30,14 +29,11 @@ redis_client = redis.Redis(host=redis_host, port=redis_port, db=0, decode_respon
 
 @app.route('/user/<int:user_id>')
 def get_user(user_id):
-
     cache_key = f"user:{user_id}"
     cached_user = redis_client.get(cache_key)
 
     if cached_user:
         user_data = json.loads(cached_user)
-
-        # Always fetch the latest product count from product-service
         try:
             resp = requests.get(f'http://product_service:5002/products/count?user_id={user_id}', timeout=2)
             if resp.status_code == 200:
@@ -46,12 +42,10 @@ def get_user(user_id):
             user_data["products_created"] = "unavailable"
         return jsonify({"user": user_data, "cached": True})
 
-
     user = User.query.get(user_id)
     if not user:
         return jsonify({"error": "User not found"}), 404
     
-    # Fetch product count from product-service
     try:
         resp = requests.get(f'http://product_service:5002/products/count?user_id={user_id}', timeout=2)
         if resp.status_code == 200:
@@ -68,18 +62,8 @@ def get_user(user_id):
         "products_created": products_count
     }
 
-    # Cache for 120 seconds
     redis_client.setex(cache_key, 120, json.dumps(user_data))
     return jsonify({"user": user_data, "cached": False})
-
-
-@app.route("/products/count")
-def count_products():
-    user_id = request.args.get("user_id", type=int)
-    if user_id is None:
-        return jsonify({"error": "user_id required"}), 400
-    count = Product.query.filter_by(user_id=user_id).count()
-    return jsonify({"count": count})
 
 @app.route("/register", methods=["POST"])
 def register():
@@ -105,14 +89,25 @@ def login():
     if not user or not check_password_hash(user.password, data.get("password")):
         return jsonify({"error": "Invalid credentials"}), 401
 
-    # update user last login
+    # Update user last login
     user.last_login = datetime.datetime.utcnow()
     db.session.commit()
 
-    token = jwt.encode({
+    payload = {
         "user_id": user.id,
+        "id": user.id,  
+        "userId": user.id,  
+        "name": user.name,
         "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=2)
-    }, app.config["SECRET_KEY"], algorithm="HS256")
+    }
+
+    try:
+        
+        token = jwt.encode(payload, app.config["SECRET_KEY"], algorithm="HS256")
+        if isinstance(token, bytes):
+            token = token.decode('utf-8')
+    except Exception as e:
+        return jsonify({"error": f"Token generation failed: {str(e)}"}), 500
 
     return jsonify({"token": token})
 

@@ -7,11 +7,10 @@ import redis
 from sqlalchemy.exc import OperationalError
 import os
 import json
+import requests  
 
 app = Flask(__name__)
-# app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://product_service:productpassword@localhost/product_db'
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
-
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db.init_app(app)
@@ -35,13 +34,25 @@ def get_product(product_id):
     if not product:
         return jsonify({"error": "Product not found"}), 404
 
+    # Fetch user name from user service
+    creator_name = None
+    try:
+        user_response = requests.get(f'http://user_service:5001/user/{product.user_id}', timeout=2)
+        if user_response.status_code == 200:
+            user_data = user_response.json()
+            creator_name = user_data.get('user', {}).get('name')
+    except Exception:
+        pass
+
     product_data = {
         "id": product.id,
         "name": product.name,
         "price": product.price,
-        "description": product.description
+        "description": product.description,
+        "user_id": product.user_id,
+        "creator": creator_name
     }
-    # Cache for 120 seconds
+    
     redis_client.setex(cache_key, 120, json.dumps(product_data))
     return jsonify({"product": product_data, "cached": False})
 
@@ -53,14 +64,28 @@ def get_products():
         return jsonify(json.loads(cached_products))
 
     products = Product.query.all()
-    products_list = [
-        {
+    products_list = []
+    
+    for p in products:
+        # Fetch user name from user service
+        creator_name = None
+        try:
+            user_response = requests.get(f'http://user_service:5001/user/{p.user_id}', timeout=2)
+            if user_response.status_code == 200:
+                user_data = user_response.json()
+                creator_name = user_data.get('user', {}).get('name')
+        except Exception:
+            pass
+            
+        products_list.append({
             "id": p.id,
             "name": p.name,
             "price": p.price,
-            "description": p.description
-        } for p in products
-    ]
+            "description": p.description,
+            "user_id": p.user_id,
+            "creator": creator_name
+        })
+    
     redis_client.setex(cache_key, 60, json.dumps(products_list))
     return jsonify(products_list)
 
@@ -86,6 +111,10 @@ def create_product():
     price = data.get("price")
     description = data.get("description")
     user_id = data.get("user_id")
+    try:
+        user_id = int(user_id) if user_id is not None else None
+    except ValueError:
+        return jsonify({'error': 'Invalid user_id'}), 400
 
     if not name or price is None or user_id is None:
         return jsonify({'error': 'Name, price, and user_id are required'}), 400
@@ -94,14 +123,28 @@ def create_product():
         product = Product(name=name, price=float(price), description=description, user_id=user_id)
         db.session.add(product)
         db.session.commit()
+        
+        # Fetch user name for response
+        creator_name = None
+        try:
+            user_response = requests.get(f'http://user_service:5001/user/{user_id}', timeout=2)
+            if user_response.status_code == 200:
+                user_data = user_response.json()
+                creator_name = user_data.get('user', {}).get('name')
+        except Exception:
+            pass
+        
         # Invalidate related caches
         redis_client.delete("products:all")
         redis_client.delete(f"products:count:user:{user_id}")
+        
         return jsonify({
             "id": product.id,
             "name": product.name,
             "price": product.price,
-            "description": product.description
+            "description": product.description,
+            "user_id": product.user_id,
+            "creator": creator_name
         }), 201
     except Exception as e:
         db.session.rollback()
@@ -118,15 +161,29 @@ def update_product(product_id):
 
     try:
         db.session.commit()
+        
+        # Fetch user name for response
+        creator_name = None
+        try:
+            user_response = requests.get(f'http://user_service:5001/user/{product.user_id}', timeout=2)
+            if user_response.status_code == 200:
+                user_data = user_response.json()
+                creator_name = user_data.get('user', {}).get('name')
+        except Exception:
+            pass
+        
         # Invalidate caches
         redis_client.delete(f"product:{product_id}")
         redis_client.delete("products:all")
         redis_client.delete(f"products:count:user:{product.user_id}")
+        
         return jsonify({
             "id": product.id,
             "name": product.name,
             "price": product.price,
-            "description": product.description
+            "description": product.description,
+            "user_id": product.user_id,
+            "creator": creator_name
         })
     except Exception as e:
         db.session.rollback()
@@ -138,10 +195,12 @@ def delete_product(product_id):
     user_id = product.user_id
     db.session.delete(product)
     db.session.commit()
+    
     # Invalidate caches
     redis_client.delete(f"product:{product_id}")
     redis_client.delete("products:all")
     redis_client.delete(f"products:count:user:{user_id}")
+    
     return jsonify({"message": "Product deleted"})
 
 @app.route("/health")
