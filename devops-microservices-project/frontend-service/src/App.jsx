@@ -110,7 +110,7 @@ function App() {
     try {
       const res = await fetch(`${apiProductUrl}/products`, {
         headers: {
-          'Authorization': `Bearer ${token}` // Add auth header if needed
+          'Authorization': `Bearer ${token}` 
         }
       });
       const data = await res.json();

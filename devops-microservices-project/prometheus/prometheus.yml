@@ -5,7 +5,12 @@ global:
 scrape_configs:
   - job_name: 'user-service'
     static_configs:
-      - targets: ['user-service:5001']
+      - targets: ['user_service:5001']
+
   - job_name: 'product-service'
     static_configs:
-      - targets: ['product-service:5002']
+      - targets: ['product_service:5002']
+  
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
