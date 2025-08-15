@@ -7,11 +7,30 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
+      # enable monitoring
+      POSTGRES_INITDB_ARGS: "--auth-host=md5"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./docker/init/init-multiple-dbs.sh:/docker-entrypoint-initdb.d/init-multiple-dbs.sh:ro
+      - ./postgres/init/init-multiple-dbs.sh:/docker-entrypoint-initdb.d/init-multiple-dbs.sh:ro
+      # add custom config for monitoring
+      - ./postgres/postgres.conf:/etc/postgresql/postgresql.conf
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf
     ports:
       - "5432:5432"
+
+  postgres_exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.12.0
+    ports:
+      - "9187:9187"
+    environment:
+      DATA_SOURCE_NAME_USER: "postgresql://user_service:userpassword@postgres:5432/user_db?sslmode=disable"
+      DATA_SOURCE_NAME_PRODUCT: "postgresql://product_service:productpassword@postgres:5432/product_db?sslmode=disable"
+    depends_on:
+      - postgres
+    command:
+      - "--web.listen-address=:9187"
+      - "--web.telemetry-path=/metrics"
+      - "--log.level=info"
 
   user_service:
     build: ./user-service
@@ -19,7 +38,7 @@ services:
       DATABASE_URL: postgresql://user_service:userpassword@postgres/user_db
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      SECRET_KEY: your_secret_key
+      SECRET_KEY: mysecretkey
     ports:
       - "5001:5001"
     depends_on:
@@ -59,6 +78,7 @@ services:
       - "9090:9090"
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml
       - promdata:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
@@ -67,6 +87,8 @@ services:
       - '--web.console.templates=/etc/prometheus/consoles'
       - '--storage.tsdb.retention.time=200h'
       - '--web.enable-lifecycle'
+    depends_on:
+      - postgres_exporter
 
   grafana:
     image: grafana/grafana-enterprise

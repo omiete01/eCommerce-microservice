@@ -1,0 +1,53 @@
+groups:
+- name: service-alerts
+  rules:
+  # user service alerts
+  - alert: UserHighErrorRate
+    expr: (sum(rate(user_service_requests_total{status=~"5.."}[5m])) or vector(0)) / (sum(rate(user_service_requests_total[5m])) or vector(1)) * 100 > 5
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High error rate on user service ({{ $value }}%)"
+
+  - alert: UserHighLatency
+    expr: (rate(user_service_request_duration_seconds_sum[5m]) / rate(user_service_request_duration_seconds_count[5m])) > 1
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High latency on user service ({{ $value }}s)"
+
+  # Product service alerts
+  - alert: ProductHighErrorRate
+    expr: (sum(rate(product_service_requests_total{status=~"5.."}[5m])) or vector(0)) / (sum(rate(product_service_requests_total[5m])) or vector(1)) * 100 > 5
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High error rate on product service ({{ $value }}%)"
+
+  - alert: ProductHighLatency
+    expr: (rate(product_service_request_duration_seconds_sum[5m]) / rate(product_service_request_duration_seconds_count[5m])) > 1
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High latency on product service ({{ $value }}s)"
+
+  # PostgreSQL Alerts
+  - alert: PostgreSQLHighConnectionUsage
+    expr: (max(pg_stat_database_numbackends) / max(pg_settings_max_connections)) * 100 > 80
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: "PostgreSQL connection usage is high ({{ $value }}%)"
+
+  - alert: PostgreSQLLowCacheHitRatio
+    expr: (rate(pg_stat_database_blks_hit[5m]) / (rate(pg_stat_database_blks_hit[5m]) + rate(pg_stat_database_blks_read[5m]))) * 100 < 90
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "PostgreSQL cache hit ratio is low ({{ $value }}%)"
