@@ -8,9 +8,12 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" <<-EOSQL
 
     CREATE USER user_service WITH ENCRYPTED PASSWORD 'userpassword';
     CREATE USER product_service WITH ENCRYPTED PASSWORD 'productpassword';
+    CREATE USER monitoring WITH SUPERUSER PASSWORD 'monitoringpassword';
 
     GRANT ALL PRIVILEGES ON DATABASE user_db TO user_service;
     GRANT ALL PRIVILEGES ON DATABASE product_db TO product_service;
+    GRANT ALL PRIVILEGES ON DATABASE user_db TO monitoring;
+    GRANT ALL PRIVILEGES ON DATABASE product_db TO monitoring;
 EOSQL
 
 # Grant schema permissions per database

@@ -1,6 +1,6 @@
 // FRONTEND - React App
 import React, { useState, useEffect } from 'react';
-import { jwtDecode } from 'jwt-decode'; // Fixed import
+import { jwtDecode } from 'jwt-decode'; 
 
 const apiUserUrl = import.meta.env.VITE_USER_API_URL;
 const apiProductUrl = import.meta.env.VITE_PRODUCT_API_URL;

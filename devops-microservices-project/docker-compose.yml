@@ -1,5 +1,6 @@
 
 services:
+  # database service
   postgres:
     image: postgres:17-alpine
     container_name: postgres
@@ -18,20 +19,22 @@ services:
     ports:
       - "5432:5432"
 
+  # backend monitoring
   postgres_exporter:
-    image: quay.io/prometheuscommunity/postgres-exporter:v0.12.0
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.15.0
     ports:
       - "9187:9187"
     environment:
-      DATA_SOURCE_NAME_USER: "postgresql://user_service:userpassword@postgres:5432/user_db?sslmode=disable"
-      DATA_SOURCE_NAME_PRODUCT: "postgresql://product_service:productpassword@postgres:5432/product_db?sslmode=disable"
+    - DATA_SOURCE_NAME=postgresql://monitoring:monitoringpassword@postgres:5432/postgres?sslmode=disable    
     depends_on:
       - postgres
     command:
       - "--web.listen-address=:9187"
       - "--web.telemetry-path=/metrics"
       - "--log.level=info"
+      - "--auto-discover-databases"
 
+  # backend service
   user_service:
     build: ./user-service
     environment:
@@ -39,6 +42,12 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       SECRET_KEY: mysecretkey
+      LOG_LEVEL: INFO
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "5001:5001"
     depends_on:
@@ -51,6 +60,12 @@ services:
       DATABASE_URL: postgresql://product_service:productpassword@postgres/product_db
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      LOG_LEVEL: INFO
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "5002:5002"
     depends_on:
@@ -58,6 +73,7 @@ services:
       - user_service
       - redis
 
+  # frontend service
   frontend:
     build: ./frontend-service
     ports:
@@ -66,12 +82,14 @@ services:
       - user_service
       - product_service
 
+  # caching service
   redis:
     image: redis:7-alpine
     container_name: redis
     ports:
       - "6379:6379"
 
+  # monitoring service
   prometheus:
     image: prom/prometheus:v2.45.0
     ports:
@@ -90,6 +108,7 @@ services:
     depends_on:
       - postgres_exporter
 
+  # monitoring service
   grafana:
     image: grafana/grafana-enterprise
     ports:
@@ -102,6 +121,10 @@ services:
     depends_on:
       - prometheus
 
+
+
+
+# volumes
 volumes:
   pgdata:
   promdata:
