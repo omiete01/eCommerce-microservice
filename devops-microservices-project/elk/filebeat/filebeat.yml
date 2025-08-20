@@ -9,6 +9,23 @@ filebeat.inputs:
         target: "json"
         overwrite_keys: true
 
+- type: log
+  enabled: true
+  paths:
+    - /user_logs/*.log
+    - /product_logs/*.log
+  json.keys_under_root: true
+  json.add_error_key: true
+  json.message_key: "message"
+  fields:
+    service_type: microservice
+  fields_under_root: true
+  multiline.pattern: '^{'
+  multiline.negate: true
+  multiline.match: after
+  multiline.max_lines: 500
+  multiline.timeout: 5s
+
 filebeat.autodiscover:
   providers:
     - type: docker
@@ -17,9 +34,13 @@ filebeat.autodiscover:
 processors:
   - add_cloud_metadata: ~
   - add_docker_metadata: ~
+  - add_host_metadata: ~
 
 output.logstash:
   hosts: ["logstash:5044"]
 
-logging.json: true
+# logging.json: true
 logging.metrics.enabled: false
+logging.to_stderr: true
+logging.level: info
+logging.to_files: false

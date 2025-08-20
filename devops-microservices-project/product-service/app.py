@@ -10,6 +10,7 @@ import json
 import requests
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 import logging
+import logging.handlers
 import datetime
 
 app = Flask(__name__)
@@ -32,10 +33,14 @@ REQUEST_COUNT = Counter('product_service_requests_total', 'Total requests', ['me
 REQUEST_DURATION = Histogram('product_service_request_duration_seconds', 'Request duration')
 PRODUCT_COUNT = Counter('product_service_products_total', 'Total products created', ['operation'])
 
+# log_dir = '/app/logs'
+# os.mkdir(log_dir)
+
 # Structured logging
 class JSONFormatter(logging.Formatter):
     def format(self, record):
         log_entry = {
+            '@timestamp': datetime.datetime.utcnow().isoformat() + 'Z',
             'timestamp': datetime.datetime.utcnow().isoformat() + 'Z',
             'level': record.levelname,
             'service': 'product_service',
@@ -61,12 +66,22 @@ class JSONFormatter(logging.Formatter):
         return json.dumps(log_entry)
 
 # Set up logging
+
+
 logger = logging.getLogger('product_service')
 logger.setLevel(logging.INFO)
 
 # Remove any existing handlers to avoid duplicates
 for handler in logger.handlers[:]:
     logger.removeHandler(handler)
+
+# Create rotating file handler (10MB per file, keep 5 files)
+# log_file = os.path.join(log_dir, 'app.log')
+# file_handler = logging.handlers.RotatingFileHandler(
+#     log_file, 
+#     maxBytes=10*1024*1024,  # 10MB
+#     backupCount=5
+# )
 
 # Create console handler with JSON formatter
 handler = logging.StreamHandler()

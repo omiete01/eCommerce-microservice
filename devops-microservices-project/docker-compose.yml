@@ -22,6 +22,7 @@ services:
   # backend monitoring
   postgres_exporter:
     image: quay.io/prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: postgres_exporter
     ports:
       - "9187:9187"
     environment:
@@ -37,12 +38,15 @@ services:
   # backend service
   user_service:
     build: ./user-service
+    container_name: user_service
     environment:
       DATABASE_URL: postgresql://user_service:userpassword@postgres/user_db
       REDIS_HOST: redis
       REDIS_PORT: 6379
       SECRET_KEY: mysecretkey
       LOG_LEVEL: INFO
+    volumes:
+      - user_logs:/app/logs
     logging:
       driver: "json-file"
       options:
@@ -56,11 +60,14 @@ services:
 
   product_service:
     build: ./product-service
+    container_name: product_service
     environment:
       DATABASE_URL: postgresql://product_service:productpassword@postgres/product_db
       REDIS_HOST: redis
       REDIS_PORT: 6379
       LOG_LEVEL: INFO
+    volumes:
+      - product_logs:/app/logs
     logging:
       driver: "json-file"
       options:
@@ -76,6 +83,7 @@ services:
   # frontend service
   frontend:
     build: ./frontend-service
+    container_name: frontend
     ports:
       - "3000:3000"
     depends_on:
@@ -92,6 +100,7 @@ services:
   # monitoring service
   prometheus:
     image: prom/prometheus:v2.45.0
+    container_name: prometheus
     ports:
       - "9090:9090"
     volumes:
@@ -111,6 +120,7 @@ services:
   # monitoring service
   grafana:
     image: grafana/grafana-enterprise
+    container_name: grafana
     ports:
       - "3001:3000"
     volumes:
@@ -123,39 +133,71 @@ services:
 
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: elasticsearch
+    restart: always
     environment:
       - discovery.type=single-node
-      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+      - ES_JAVA_OPTS=-Xms256m -Xmx256m
       - xpack.security.enabled=false
       - xpack.security.enrollment.enabled=false
+      - bootstrap.memory_lock=false
+      - cluster.routing.allocation.disk.threshold_enabled=false
+      # - logger.level=ERROR
     ports:
       - "9200:9200"
       - "9300:9300"
     volumes:
       - elasticsearch_data:/usr/share/elasticsearch/data
+      # - ./elk/elasticsearch/config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.2"
+          memory: 256M
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
 
   logstash:
     image: docker.elastic.co/logstash/logstash:8.11.0
+    container_name: logstash
+    restart: always
     ports:
       - "5044:5044"
       - "9600:9600"
     volumes:
       - ./elk/logstash/pipeline:/usr/share/logstash/pipeline
       - ./elk/logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml
+      # - ./elk/logstash/config/log4j2.properties:/usr/share/logstash/config/log4j2.properties
       - user_logs:/user_logs:ro
       - product_logs:/product_logs:ro
     depends_on:
       - elasticsearch
     environment:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - LS_JAVA_OPTS=-Xms128m -Xmx128m   
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
 
   kibana:
     image: docker.elastic.co/kibana/kibana:8.11.0
+    container_name: kibana
     ports:
       - "5601:5601"
     volumes:
@@ -164,17 +206,31 @@ services:
       - elasticsearch
     environment:
       - ELASTICSEARCH_HOST=http://elasticsearch:9200
+      # - LOGGING_ROOT_LEVEL=warn  
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 768M
+        reservations:
+          cpus: '0.25'
+          memory: 768M
 
   # Filebeat for container log collection
   filebeat:
     image: docker.elastic.co/beats/filebeat:8.11.0
+    container_name: filebeat
     user: root
     volumes:
       - ./elk/filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - user_logs:/user_logs:ro
+      - product_logs:/product_logs:ro
     depends_on:
-      - logstash
+      logstash:
+        condition: service_healthy
     command: ["--strict.perms=false"]
 
 # volumes

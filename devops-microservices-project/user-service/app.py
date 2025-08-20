@@ -8,6 +8,7 @@ from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 import jwt
 import logging
+import logging.handlers
 import datetime
 import time
 from sqlalchemy.exc import OperationalError
@@ -36,10 +37,15 @@ REQUEST_DURATION = Histogram('user_service_request_duration_seconds', 'Request d
 ACTIVE_USERS = Gauge('user_service_active_users', 'Number of active users')
 LOGIN_ATTEMPTS = Counter('user_service_login_attempts_total', 'Login attempts', ['status'])
 
+
+# log_dir = '/app/logs'
+# os.mkdir(log_dir)
+
 # Structured logging
 class JSONFormatter(logging.Formatter):
     def format(self, record):
         log_entry = {
+            '@timestamp': datetime.datetime.utcnow().isoformat() + 'Z',
             'timestamp': datetime.datetime.utcnow().isoformat() + 'Z',
             'level': record.levelname,
             'service': 'user_service',
@@ -55,6 +61,8 @@ class JSONFormatter(logging.Formatter):
         # Add extra fields if present
         if hasattr(record, 'user_id'):
             log_entry['user_id'] = record.user_id
+        if hasattr(record, 'product_id'):
+            log_entry['product_id'] = record.product_id
         if hasattr(record, 'user_name'):
             log_entry['user_name'] = record.user_name
         if hasattr(record, 'endpoint'):
@@ -65,12 +73,22 @@ class JSONFormatter(logging.Formatter):
         return json.dumps(log_entry)
 
 # Set up logging
+
+
 logger = logging.getLogger('user_service')
 logger.setLevel(logging.INFO)
 
 # Remove any existing handlers to avoid duplicates
 for handler in logger.handlers[:]:
     logger.removeHandler(handler)
+
+# Create rotating file handler (10MB per file, keep 5 files)
+# log_file = os.path.join(log_dir, 'app.log')
+# file_handler = logging.handlers.RotatingFileHandler(
+#     log_file, 
+#     maxBytes=10*1024*1024,  # 10MB
+#     backupCount=5
+# )
 
 # Create console handler with JSON formatter
 handler = logging.StreamHandler()

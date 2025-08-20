@@ -1,2 +1,8 @@
-http.host: "0.0.0.0"
+http.host: 0.0.0.0
+log.level: info
+pipeline.batch.delay: 200
+pipeline.batch.size: 25
+pipeline.workers: 1
+queue.max_bytes: 64mb
+queue.type: memory
 xpack.monitoring.enabled: false
